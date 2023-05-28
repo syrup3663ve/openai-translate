@@ -65,9 +65,8 @@ function Top() {
     };
 
     const clearAnswers = () => {
-        if (window.confirm('回答をすべてクリアしますか？')) {
-            setAnswers(answers.map(_ => ''));
-        }
+        setContents(['']);
+        setAnswers(['']);
     };
 
     const html = () =>
