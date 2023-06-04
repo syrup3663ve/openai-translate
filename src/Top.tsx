@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import './App.css';
-import {Box, Button} from "@mui/material";
+import {Alert, Box, Button, Container, Snackbar} from "@mui/material";
 import {ContentForm} from "./ContentForm";
 import {useOpenAIApiContext} from "./openai/OpenAIApiContext";
 import {ChatCompletionResponseMessageRoleEnum} from "openai";
@@ -11,9 +11,11 @@ function Top() {
     const [isLoading, setIsLoading] = useState(false);
     const [contents, setContents] = useState(['']);
     const [answers, setAnswers] = useState<Array<string>>(['']);
+    const [open, setOpen] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
     const openAiApiCtx = useOpenAIApiContext();
 
-    const submitContents = () => {
+    const submitContents = async () => {
         const post = async (content: string) => {
             if (!process.env.REACT_APP_OPENAI_MODEL) return;
             return openAiApiCtx?.createChatCompletion({
@@ -30,14 +32,23 @@ function Top() {
                 ]
             });
         };
-        const postAll = async () => {
-            const responses = await Promise.all(contents.filter(x => x).map(x => post(x)));
-            const newAnswers = responses?.flatMap(x => x?.data?.choices.filter(x => x?.message?.role === ChatCompletionResponseMessageRoleEnum.Assistant)
-                .map(x => x?.message?.content ?? '') ?? []);
-            setAnswers(newAnswers);
-        }
+        const postAll = async () => await Promise.all(contents.filter(x => x).map(x => post(x)));
+
         setIsLoading(true);
-        postAll().finally(() => setIsLoading(false));
+        await postAll()
+            .then(x => {
+                const allSuccess = x.every(y => y?.status === 200);
+                setIsSuccess(allSuccess);
+                if (allSuccess) {
+                    const newAnswers = x.flatMap(x => x?.data?.choices.filter(x => x?.message?.role === ChatCompletionResponseMessageRoleEnum.Assistant)
+                        .map(x => x?.message?.content ?? '') ?? []);
+                    setAnswers(newAnswers);
+                }
+            })
+            .finally(() => {
+                setOpen(true);
+                setIsLoading(false);
+            });
     };
 
     const addForm = () => {
@@ -48,7 +59,7 @@ function Top() {
     const removeForm = (index: number) => {
         setContents([...contents.filter((_, i) => i !== index)]);
         setAnswers([...answers.filter((_, i) => i !== index)]);
-    }
+    };
 
     const updateContent = (index: number, value: string) => {
         const newContents = contents.map((x, i) => {
@@ -92,37 +103,51 @@ function Top() {
 
     return (
         <div>
+            <Snackbar
+                anchorOrigin={{horizontal: 'center', vertical: 'top'}}
+                open={open} autoHideDuration={3000} onClose={() => setOpen(false)}>
+                {isSuccess ?
+                    <Alert onClose={() => setOpen(false)} severity="success" sx={{width: '100%'}}>
+                        翻訳成功！
+                    </Alert> :
+                    <Alert onClose={() => setOpen(false)} severity="error" sx={{width: '100%'}}>
+                        翻訳失敗！
+                    </Alert>
+                }
+            </Snackbar>
             <Box sx={{paddingY: 2}}>
                 <div>ChatGPTで技術書を翻訳したい部</div>
             </Box>
-            <Box sx={{paddingBottom: 2}}>
+            <Container maxWidth="sm">
+                <Box sx={{paddingBottom: 2}}>
                 <span style={{paddingRight: '1.5rem'}}>
                     <LoadingButton loading={isLoading} variant="outlined" onClick={submitContents}>
                         送信
                     </LoadingButton>
                 </span>
-                <span style={{paddingRight: '1.5rem'}}>
+                    <span style={{paddingRight: '1.5rem'}}>
                     <Button variant="outlined" onClick={addForm}>
                         追加
                     </Button>
                 </span>
-                <span style={{paddingRight: '1.5rem'}}>
+                    <span style={{paddingRight: '1.5rem'}}>
                     <Button variant="outlined" onClick={copyAnswer}>コピー</Button>
                 </span>
-                <span style={{paddingRight: '1.5rem'}}>
+                    <span style={{paddingRight: '1.5rem'}}>
                     <Button variant="outlined" color='warning' onClick={clearAnswers}>
                         クリア
                     </Button>
                 </span>
-            </Box>
-            <div>
-                {contentForms}
-            </div>
-            <Box>
-                <span style={{paddingBottom: '1rem'}}>
-                    <HtmlRenderer raw_html={html()}/>
-                </span>
-            </Box>
+                </Box>
+                <div>
+                    {contentForms}
+                </div>
+                <Box style={{marginBottom: '3rem'}}>
+                   <span style={{paddingBottom: '1rem'}}>
+                   <HtmlRenderer raw_html={html()}/>
+                   </span>
+                </Box>
+            </Container>
         </div>
     );
 }

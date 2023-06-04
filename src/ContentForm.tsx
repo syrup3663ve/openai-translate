@@ -27,6 +27,7 @@ export const ContentForm = (props: ContentFormProps) => {
                     placeholder={'内容'}
                     minRows={5}
                     onChange={onChange}
+                    value={props.content}
                 />
             </Box>
             <Box
